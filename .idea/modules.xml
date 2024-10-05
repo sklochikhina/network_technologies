@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/TCP/TCP.iml" filepath="$PROJECT_DIR$/TCP/TCP.iml" />
+      <module fileurl="file://$PROJECT_DIR$/network_technologies.iml" filepath="$PROJECT_DIR$/network_technologies.iml" />
+      <module fileurl="file://$PROJECT_DIR$/self_copies/self_copies.iml" filepath="$PROJECT_DIR$/self_copies/self_copies.iml" />
+    </modules>
+  </component>
+</project>
