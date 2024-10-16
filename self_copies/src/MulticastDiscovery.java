@@ -9,7 +9,6 @@ public class MulticastDiscovery {
     private static final int PORT = 1234;           // Порт для обмена сообщениями
     private static final long TIMEOUT = 5000;       // Тайм-аут для удаления неактивных пиров
     private static final long SEND_INTERVAL = 2000; // Интервал отправки сообщений
-    private static int activePeersCount = 0;        // Количество активных пиров
     
     private static final ConcurrentHashMap<String, PeerInfo> activePeers = new ConcurrentHashMap<>();
     
@@ -32,10 +31,13 @@ public class MulticastDiscovery {
         System.out.println("My uniqueID: " + uniqueID);
         
         try (MulticastSocket socket = new MulticastSocket(PORT)) {
+            NetworkInterface netIf = NetworkInterface.getByName("wlan0");
+            
+            socket.setNetworkInterface(netIf);
             socket.setReuseAddress(true);
             socket.setTimeToLive(1);
             
-            socket.joinGroup(group); // set interface
+            socket.joinGroup(new InetSocketAddress(group, PORT), netIf);
             
             Thread receiveThread = new Thread(() -> receiveMessages(socket));
             receiveThread.start();
@@ -43,10 +45,7 @@ public class MulticastDiscovery {
             Thread sendThread = new Thread(() -> sendMessages(socket, group));
             sendThread.start();
             
-            while (true) {
-                removeInactivePeers();
-                printActivePeers();
-            }
+            removeInactivePeers();
         }
     }
     
@@ -78,6 +77,12 @@ public class MulticastDiscovery {
                 System.out.println("Received message \"" + message + "\" from " + senderAddress);
                 
                 String peerUUID = message.substring(21);
+                if (!activePeers.containsKey(peerUUID)) {
+                    synchronized (activePeers) {
+                        activePeers.put(peerUUID, new PeerInfo(senderAddress, Instant.now()));
+                        printActivePeers();
+                    }
+                }
                 activePeers.put(peerUUID, new PeerInfo(senderAddress, Instant.now()));
             } catch (IOException e) {
                 e.printStackTrace();
@@ -86,24 +91,25 @@ public class MulticastDiscovery {
     }
     
     private static void removeInactivePeers() {
-        Instant now = Instant.now();
-        activePeers.entrySet().removeIf(entry -> {
-            PeerInfo info = entry.getValue();
-            long elapsed = now.toEpochMilli() - info.lastSeen.toEpochMilli();
-            return elapsed > TIMEOUT;
-        });
-    }
-    
-    private static void printActivePeers() {
-        // System.out.println("activePeers.size: " + activePeers.size() + " ; activePeersCount: " + activePeersCount);
-        synchronized (activePeers) {
-            if (activePeers.size() != activePeersCount) {
-                activePeersCount = activePeers.size();
-                System.out.println("Active peers:");
-                activePeers.forEach((uuid, info) -> System.out.println("UUID: " + uuid + " IP: " + info.ipAddress));
+        while (true) {
+            Instant now = Instant.now();
+            if (activePeers.entrySet().removeIf(entry -> {
+                PeerInfo info = entry.getValue();
+                long elapsed = now.toEpochMilli() - info.lastSeen.toEpochMilli();
+                return elapsed > TIMEOUT;
+            })) {
+                synchronized (activePeers) {
+                    printActivePeers();
+                }
             }
         }
     }
+    
+    private static void printActivePeers() {
+        System.out.println("Active peers:");
+        activePeers.forEach((uuid, info) -> System.out.println("UUID: " + uuid + " IP: " + info.ipAddress));
+    }
+    
     private static class PeerInfo {
         String ipAddress;
         Instant lastSeen;
