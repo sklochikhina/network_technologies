@@ -51,7 +51,6 @@ public class Client {
                 System.out.println("File transferred successfully.");
             else
                 System.err.println("Error occurred while transfer file.");
-            
             in.close();
         } catch (IOException e) {
             System.err.println("Error: " + e.getMessage());

@@ -110,7 +110,7 @@ public class Server {
                         System.out.println("File \"" + fileName + "\" successfully received from " + clientSocket.getInetAddress() + "\n");
                         clientSocket.getOutputStream().write("SUCCESS".getBytes());
                     } else {
-                        System.err.printf("Error receiving \"" + fileName + "\" from " + clientSocket.getInetAddress() +
+                        System.err.println("Error receiving \"" + fileName + "\" from " + clientSocket.getInetAddress() +
                                         ". Expected: " + fileSize + ", received: " + receivedSize + "\n");
                         clientSocket.getOutputStream().write("FAILURE".getBytes());
                     }
