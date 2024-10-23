@@ -19,15 +19,15 @@ public class Client {
             return;
         }
         
-        String filePath =       args[0];
-        String serverAddress =  args[1];
-        int serverPort =        Integer.parseInt(args[2]);
+        String filePath =      args[0];
+        String serverAddress = args[1];
+        int serverPort =       Integer.parseInt(args[2]);
         
         File file = new File(filePath);
         if (!checkFile(file, filePath)) return;
         
         try (Socket socket = new Socket(serverAddress, serverPort);
-             FileInputStream fis = new FileInputStream(filePath);
+             FileInputStream fis = new FileInputStream(file);
              DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream())) {
             
             // Отправка имени и размера файла
@@ -43,9 +43,9 @@ public class Client {
             // Получение ответа от сервера
             InputStream in = socket.getInputStream();
             byte[] response = new byte[7];
-            if (in.read(response) == -1)
+            if (in.readNBytes(response, 0, 7) == -1)
                 System.err.println("No response from server.");
-            String result = new String(response);
+            String result = new String(response, StandardCharsets.UTF_8);
             
             if ("SUCCESS".equals(result))
                 System.out.println("File transferred successfully.");

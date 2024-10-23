@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,8 +16,8 @@ import java.util.concurrent.*;
 *       количество байтов переданных за единицу времени.
 *   4) После успешного сохранения всего файла сервер проверяет, совпадает ли размер полученных данных с размером,
 *       переданным клиентом, и сообщает клиенту об успехе или неуспехе операции, после чего закрывает соединение.
-*   5) Сервер должен уметь работать параллельно с несколькими клиентами. Для этого необходимо использовать треды
-*       (POSIX threads или их аналог в вашей ОС). Сразу после приёма соединения от одного клиента, сервер ожидает следующих клиентов.
+*   5) Сервер должен уметь работать параллельно с несколькими клиентами. Для этого необходимо использовать треды.
+*       Сразу после приёма соединения от одного клиента, сервер ожидает следующих клиентов.
 *   6) В случае ошибки сервер должен разорвать соединение с клиентом. При этом он должен продолжить обслуживать остальных клиентов.
 *   7) Все используемые ресурсы ОС должны быть корректно освобождены, как только они больше не нужны. */
 
@@ -37,7 +38,6 @@ public class Server {
         
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             InetAddress address = serverSocket.getInetAddress();
-            serverSocket.setReuseAddress(true);
             
             System.out.println("Server runs at ip-address " + address.getHostAddress());
             System.out.println("Server runs at port " + port);
@@ -48,14 +48,13 @@ public class Server {
             while (true) {
                 Socket clientSocket = serverSocket.accept();
                 System.out.println("New client connection from " + clientSocket.getRemoteSocketAddress());
-                executor.submit(new ClientHandler(clientSocket));
+                executor.execute(new ClientHandler(clientSocket));
             }
         }
     }
     
     static class ClientHandler implements Runnable {
         private final Socket clientSocket;
-        private long totalBytesReceived = 0;
         
         ClientHandler(Socket clientSocket) {
             this.clientSocket = clientSocket;
@@ -64,26 +63,28 @@ public class Server {
         @Override
         public void run() {
             try (InputStream in = clientSocket.getInputStream();
-                 DataInputStream dataInputStream = new DataInputStream(in)) {
+                 DataInputStream dataInputStream = new DataInputStream(in);
+                 clientSocket
+            ) {
                 
                 String fileName = dataInputStream.readUTF();
                 long fileSize =   dataInputStream.readLong();
+                File file = new File(fileName);
                 
-                Path filePath = Paths.get(UPLOAD_DIR, fileName);
+                Path filePath = Paths.get(UPLOAD_DIR, file.getName());
+                long startTime, totalBytesReceived;
                 
                 try (FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
                     byte[] buffer = new byte[BUFFER_SIZE];
-                    long receivedSize = 0;
+                    totalBytesReceived = 0;
                     
-                    long startTime = Instant.now().toEpochMilli();
+                    startTime = Instant.now().toEpochMilli();
                     long lastReportTime = startTime;
                     long bytesReceivedLastInterval = 0;
                     
-                    while (receivedSize < fileSize) {
+                    while (totalBytesReceived < fileSize) {
                         int bytesRead = dataInputStream.read(buffer);
-                        if (bytesRead == -1) break;
                         fos.write(buffer, 0, bytesRead);
-                        receivedSize += bytesRead;
                         totalBytesReceived += bytesRead;
                         bytesReceivedLastInterval += bytesRead;
                         
@@ -93,36 +94,28 @@ public class Server {
                             double averageSpeed =       totalBytesReceived        / ((currentTime - startTime) / 1000.0);
                             
                             System.out.printf("[Client %s] Instantaneous speed: %.2f B/s, Average speed: %.2f B/s%n",
-                                    clientSocket.getInetAddress(), instantaneousSpeed, averageSpeed);
+                                    clientSocket.getRemoteSocketAddress(), instantaneousSpeed, averageSpeed);
                             
                             lastReportTime = currentTime;
                             bytesReceivedLastInterval = 0;
                         }
                     }
-                    
-                    double totalTime = (Instant.now().toEpochMilli() - startTime) / 1000.0;
-                    if (totalTime < 3.0) {
-                        double averageSpeed = totalBytesReceived / (totalTime / 1000.0);
-                        System.out.printf("[Client %s] Average speed: %.2f B/s%n", clientSocket.getInetAddress(), averageSpeed);
-                    }
-                    
-                    if (receivedSize == fileSize) {
-                        System.out.println("File \"" + fileName + "\" successfully received from " + clientSocket.getInetAddress() + "\n");
-                        clientSocket.getOutputStream().write("SUCCESS".getBytes());
-                    } else {
-                        System.err.println("Error receiving \"" + fileName + "\" from " + clientSocket.getInetAddress() +
-                                        ". Expected: " + fileSize + ", received: " + receivedSize + "\n");
-                        clientSocket.getOutputStream().write("FAILURE".getBytes());
-                    }
+                }
+                
+                double totalTime = (Instant.now().toEpochMilli() - startTime) / 1000.0;
+                double averageSpeed = totalBytesReceived / totalTime;
+                System.out.printf("[Client %s] Average speed: %.2f B/s%n", clientSocket.getRemoteSocketAddress(), averageSpeed);
+                
+                if (totalBytesReceived == fileSize) {
+                    System.out.println("File \"" + fileName + "\" successfully received from " + clientSocket.getRemoteSocketAddress() + "\n");
+                    clientSocket.getOutputStream().write("SUCCESS".getBytes(StandardCharsets.UTF_8));
+                } else {
+                    System.err.println("Error receiving \"" + fileName + "\" from " + clientSocket.getRemoteSocketAddress() +
+                                        ". Expected: " + fileSize + ", received: " + totalBytesReceived + "\n");
+                    clientSocket.getOutputStream().write("FAILURE".getBytes(StandardCharsets.UTF_8));
                 }
             } catch (IOException e) {
                 System.err.println("Error occurred while processing the client: " + e.getMessage());
-            } finally {
-                try {
-                    clientSocket.close();
-                } catch (IOException e) {
-                    System.err.println("Error occurred while closing the connection: " + e.getMessage());
-                }
             }
         }
     }
