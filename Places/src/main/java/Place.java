@@ -1,0 +1,1 @@
+public record Place(String name, String id) {}
