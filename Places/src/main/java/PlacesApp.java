@@ -41,9 +41,9 @@ public class PlacesApp {
         
         userInputLocation = userInputLocation.replaceAll(" ", "+");
         
-        CompletableFuture<List<Location>> locationFuture = searchLocations(userInputLocation);
+        CompletableFuture<List<Location>> locationsListFuture = searchLocations(userInputLocation);
         
-        locationFuture.thenCompose(locations -> {
+        CompletableFuture<Location> locationFuture = locationsListFuture.thenCompose(locations -> {
             System.out.println("Please, choose one of the following locations:");
             
             int i = 1;
@@ -63,23 +63,25 @@ public class PlacesApp {
             
             Location chosenLocation = locations.get(i - 1);
             
-            CompletableFuture<Weather> weatherFuture = getWeather(chosenLocation);
-            CompletableFuture<List<Place>> placesFuture = getPlaces(chosenLocation);
-            
-            return weatherFuture.thenCombine(placesFuture, (weather, places) -> {
-                System.out.println("The weather in " + chosenLocation.getName() + ": \n" + weather.getWeatherInfo());
-                System.out.println("//--------------------------------------------------//\n" +
-                                    "Interesting places nearby:");
-                return CompletableFuture.allOf(places.stream()
-                                .map(place -> getPlaceDetails(place).thenAccept(details -> {
-                                    System.out.println("\tPlace: " + place.name());
-                                    System.out.println("\t  Description:");
-                                    details.getDescription();
-                                }))
-                                .toArray(CompletableFuture[]::new)
-                );
-            }).thenCompose(future -> future);
-        }).join();
+            return CompletableFuture.completedFuture(chosenLocation);
+        });
+        
+        CompletableFuture<Weather> weatherFuture =    locationFuture.thenCompose(PlacesApp::getWeather);
+        CompletableFuture<List<Place>> placesFuture = locationFuture.thenCompose(PlacesApp::getPlaces);
+        
+        locationFuture.thenCompose(chosenLocation -> weatherFuture.thenCombine(placesFuture, (weather, places) -> {
+            System.out.println("The weather in " + chosenLocation.getName() + ": \n" + weather.getWeatherInfo());
+            System.out.println("//--------------------------------------------------//\n" +
+                                "Interesting places nearby:");
+            return CompletableFuture.allOf(places.stream()
+                    .map(place -> getPlaceDetails(place).thenAccept(details -> {
+                        System.out.println("\tPlace: " + place.name());
+                        System.out.println("\t  Description:");
+                        details.getDescription();
+                    }))
+                    .toArray(CompletableFuture[]::new)
+            );
+        }).thenCompose(future -> future)).join();
     }
     
     public static CompletableFuture<List<Location>> searchLocations(String query) {
