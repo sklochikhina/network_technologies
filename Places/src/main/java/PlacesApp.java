@@ -43,7 +43,7 @@ public class PlacesApp {
         
         CompletableFuture<List<Location>> locationsListFuture = searchLocations(userInputLocation);
         
-        CompletableFuture<Location> locationFuture = locationsListFuture.thenCompose(locations -> {
+        CompletableFuture<Location> locationFuture = locationsListFuture.thenApply(locations -> {
             System.out.println("Please, choose one of the following locations:");
             
             int i = 1;
@@ -53,35 +53,42 @@ public class PlacesApp {
             }
             
             i = 0;
-            while (i < 1 || i >= locations.size()) {
+            while (i < 1 || i > locations.size()) {
                 System.out.print("You choose: ");
                 if (scanner.hasNextInt())
                     i = scanner.nextInt();
-                if (i < 1 || i >= locations.size())
+                if (i < 1 || i > locations.size())
                     System.out.println("Wrong input, please try again.");
             }
             
-            Location chosenLocation = locations.get(i - 1);
-            
-            return CompletableFuture.completedFuture(chosenLocation);
+            return locations.get(i - 1);
         });
         
-        CompletableFuture<Weather> weatherFuture =    locationFuture.thenCompose(PlacesApp::getWeather);
-        CompletableFuture<List<Place>> placesFuture = locationFuture.thenCompose(PlacesApp::getPlaces);
+        CompletableFuture<Weather> weatherFuture =      locationFuture.thenCompose(PlacesApp::getWeather);
+        CompletableFuture<List<Place>> placesFuture =   locationFuture.thenCompose(PlacesApp::getPlaces);
         
-        locationFuture.thenCompose(chosenLocation -> weatherFuture.thenCombine(placesFuture, (weather, places) -> {
+        CompletableFuture<List<String>> detailsFuture = placesFuture.thenCompose(places -> {
+            
+            List<CompletableFuture<String>> detailFutures = places.stream()
+                    .map(place -> getPlaceDetails(place).thenApply(details ->
+                            "\tPlace: " + place.name() + "\n\t  Description:\n" + details.getDescription()))
+                    .toList();
+            
+            return CompletableFuture.allOf(detailFutures.toArray(new CompletableFuture[0]))
+                    .thenApply(v -> detailFutures.stream()
+                            .map(CompletableFuture::join)
+                            .toList()
+                    );
+        });
+        
+        weatherFuture.thenCombine(detailsFuture, (weather, details) -> {
+            Location chosenLocation = locationFuture.join();
             System.out.println("The weather in " + chosenLocation.getName() + ": \n" + weather.getWeatherInfo());
-            System.out.println("//--------------------------------------------------//\n" +
-                                "Interesting places nearby:");
-            return CompletableFuture.allOf(places.stream()
-                    .map(place -> getPlaceDetails(place).thenAccept(details -> {
-                        System.out.println("\tPlace: " + place.name());
-                        System.out.println("\t  Description:");
-                        details.getDescription();
-                    }))
-                    .toArray(CompletableFuture[]::new)
-            );
-        }).thenCompose(future -> future)).join();
+            System.out.println("//--------------------------------------------------//\n" + "Interesting places nearby:");
+            for (int i = 0; i < limit; i++)
+                System.out.println(details.get(i));
+            return null;
+        }).join();
     }
     
     public static CompletableFuture<List<Location>> searchLocations(String query) {
@@ -89,18 +96,18 @@ public class PlacesApp {
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(uri)).build();
         
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(response -> {
-                    try {
-                        JsonNode jsonNode = objectMapper.readTree(response.body());
-                        List<Location> locations = parseLocations(jsonNode);
-                        if (locations == null)
-                            throw new NullPointerException();
-                        return parseLocations(jsonNode);
-                    } catch (NullPointerException e) {
-                        throw new RuntimeException("Couldn't find any locations by the given location name.", e);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error occurred while searching the location.", e);
-                    }
-                });
+            try {
+                JsonNode jsonNode = objectMapper.readTree(response.body());
+                List<Location> locations = parseLocations(jsonNode);
+                if (locations == null)
+                    throw new NullPointerException();
+                return parseLocations(jsonNode);
+            } catch (NullPointerException e) {
+                throw new RuntimeException("Couldn't find any locations by the given location name.", e);
+            } catch (Exception e) {
+                throw new RuntimeException("Error occurred while searching the location.", e);
+            }
+        });
     }
     
     public static CompletableFuture<Weather> getWeather(Location location) {
@@ -108,28 +115,28 @@ public class PlacesApp {
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(uri)).build();
         
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(response -> {
-                    try {
-                        JsonNode jsonNode = objectMapper.readTree(response.body());
-                        return parseWeather(jsonNode);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error occurred while getting the weather information.", e);
-                    }
-                });
+            try {
+                JsonNode jsonNode = objectMapper.readTree(response.body());
+                return parseWeather(jsonNode);
+            } catch (Exception e) {
+                throw new RuntimeException("Error occurred while getting the weather information.", e);
+            }
+        });
     }
     
     public static CompletableFuture<List<Place>> getPlaces(Location location) {
         String uri = PLACES_API + "&filter=circle:" + location.getLng() + "," + location.getLat() + "," + circleRadiusMeters +
-                        "&limit=" + limit + "&apiKey=" + places_apiKey;
+                "&limit=" + limit + "&apiKey=" + places_apiKey;
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(uri)).build();
         
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(response -> {
-                    try {
-                        JsonNode jsonNode = objectMapper.readTree(response.body());
-                        return parsePlaces(jsonNode);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error occurred while getting the interesting places.", e);
-                    }
-                });
+            try {
+                JsonNode jsonNode = objectMapper.readTree(response.body());
+                return parsePlaces(jsonNode);
+            } catch (Exception e) {
+                throw new RuntimeException("Error occurred while getting the interesting places.", e);
+            }
+        });
     }
     
     public static CompletableFuture<PlaceDetails> getPlaceDetails(Place place) {
@@ -137,13 +144,13 @@ public class PlacesApp {
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(uri)).build();
         
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(response -> {
-                    try {
-                        JsonNode jsonNode = objectMapper.readTree(response.body());
-                        return parsePlaceDetails(jsonNode);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Error occurred while getting the place details.", e);
-                    }
-                });
+            try {
+                JsonNode jsonNode = objectMapper.readTree(response.body());
+                return parsePlaceDetails(jsonNode);
+            } catch (Exception e) {
+                throw new RuntimeException("Error occurred while getting the place details.", e);
+            }
+        });
     }
     
     public static Location getLocationFromHit(JsonNode hit) {

@@ -13,12 +13,14 @@ public class PlaceDetails {
         this.openingHours = openingHours;
     }
     
-    public void getDescription() {
+    public String getDescription() {
         int i = 1;
-        if (address != null)      System.out.println("\t\t" + i++ + ". address: " + address);
-        if (email != null)        System.out.println("\t\t" + i++ + ". email: " + email);
-        if (phone != null)        System.out.println("\t\t" + i++ + ". phone: " + phone);
-        if (website != null)      System.out.println("\t\t" + i++ + ". website: " + website);
-        if (openingHours != null) System.out.println("\t\t" + i + ". openingHours: " + openingHours);
+        String description = "";
+        if (address != null)      description += "\t\t" + i++ + ". address: " + address + "\n";
+        if (email != null)        description += "\t\t" + i++ + ". email: " + email + "\n";
+        if (phone != null)        description += "\t\t" + i++ + ". phone: " + phone + "\n";
+        if (website != null)      description += "\t\t" + i++ + ". website: " + website + "\n";
+        if (openingHours != null) description += "\t\t" + i + ". openingHours: " + openingHours + "\n";
+        return description;
     }
 }
