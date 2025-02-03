@@ -2,5 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/go-socks" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/network-labs" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/snake-game" vcs="Git" />
   </component>
 </project>

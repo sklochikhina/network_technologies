@@ -7,11 +7,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="Places" />
-        <module name="SnakeGame" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="places (2)" target="23" />
+      <module name="SnakeGame" target="17" />
       <module name="test007" target="23" />
       <module name="untitled" target="23" />
     </bytecodeTargetLevel>
